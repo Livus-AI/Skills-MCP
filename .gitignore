@@ -74,3 +74,4 @@ Thumbs.db
 # Keep example workflows, but ignore user-created ones
 # workflows/*.py
 # !workflows/example_*.py
+server.log

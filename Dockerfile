@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Install dependencies
 COPY pyproject.toml .
-RUN pip install --no-cache-dir mcp requests fastapi uvicorn
+RUN pip install --no-cache-dir mcp requests fastapi uvicorn sse-starlette
 
 # Copy source code
 COPY src/ ./src/
@@ -18,4 +18,4 @@ ENV PORT=8000
 EXPOSE 8000
 
 # Run the HTTP server
-CMD ["python", "src/http_server.py"]
+CMD ["python", "src/mcp_http_server.py"]
