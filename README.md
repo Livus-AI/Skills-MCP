@@ -15,15 +15,16 @@ Skills are folders containing:
 - **assets/** - Static resources (templates, data files)
 
 Skills use **progressive disclosure** to efficiently manage context:
-1. **Level 1**: Name + description loaded at startup for all skills
-2. **Level 2**: Full SKILL.md loaded when skill is activated
-3. **Level 3**: Scripts/references loaded only when needed
+1. **Level 1**: Name + description always visible in the `skill` tool description
+2. **Level 2**: Full SKILL.md loaded when `skill(name)` is called
+3. **Level 3**: Scripts/references loaded when `execute_skill_script()` or `get_skill_resource()` is called
 
 ## Features
 
-- **Skill Discovery**: List all available skills with metadata
+- **Dynamic Skill Discovery**: All skill names and descriptions are embedded in the `skill` tool description
 - **Progressive Loading**: Load skill instructions on demand
 - **Script Execution**: Run pre-built Python scripts from skills
+- **Resource Access**: Load reference docs and assets as needed
 - **Agent Skills Compatible**: Follows the open Agent Skills specification
 
 ## Getting Started
@@ -38,7 +39,7 @@ Skills use **progressive disclosure** to efficiently manage context:
 1. **Clone the repository:**
 
     ```bash
-    git clone https://github.com/YoruLabs/Skills-MCP.git
+    git clone https://github.com/Livus-AI/Skills-MCP.git
     cd Skills-MCP
     ```
 
@@ -60,26 +61,45 @@ Skills use **progressive disclosure** to efficiently manage context:
 
 ## MCP Tools
 
-The server exposes the following tools:
+The server exposes **3 tools**:
 
 | Tool | Description |
 | :--- | :--- |
-| `list_skills` | **Start here.** Lists all available skills with name and description. |
-| `get_skill` | Loads a skill's full SKILL.md content and lists available resources. |
-| `get_skill_resource` | Loads a specific resource file (reference docs, assets). |
-| `execute_skill_script` | Executes a Python script from a skill's `scripts/` directory. |
+| `skill(name)` | Load a skill's full instructions. **The tool description dynamically includes ALL skill names and descriptions.** |
+| `execute_skill_script(skill_name, script_name, params)` | Execute a Python script from a skill's `scripts/` directory. |
+| `get_skill_resource(skill_name, resource_path)` | Load a specific resource file (reference docs, assets). |
 
-### Typical Workflow
+### How It Works
+
+The `skill` tool description is **dynamically generated** to always include the name and description of every available skill. This means:
+
+1. **Agents see all skills immediately** - No need to call a "list" function
+2. **One call to load** - `skill("name")` loads full instructions
+3. **Execute when ready** - `execute_skill_script()` runs scripts
+
+### Example Workflow
 
 ```
-1. list_skills()                    → Discover available skills
-2. get_skill("skill-name")          → Load instructions and see available scripts
-3. execute_skill_script(...)        → Run a script with parameters
+# Agent reads skill tool description and sees:
+# - hello-world: A simple example skill...
+# - slack-message: Post messages to Slack...
+
+# Step 1: Load the skill
+skill("slack-message")
+# Returns: full instructions, available scripts, resources
+
+# Step 2: Execute a script
+execute_skill_script("slack-message", "post.py", {"channel": "#general", "message": "Hello!"})
+# Returns: script output
 ```
 
 ## Creating a Skill
 
-### Directory Structure
+See [SKILL_CREATION.md](SKILL_CREATION.md) for the complete guide.
+
+### Quick Start
+
+1. **Create the directory structure:**
 
 ```
 skills/
@@ -93,7 +113,7 @@ skills/
         └── template.json
 ```
 
-### SKILL.md Format
+2. **Create SKILL.md with frontmatter:**
 
 ```yaml
 ---
@@ -115,14 +135,9 @@ Brief description of what this skill helps accomplish.
 
 ## How to Use
 Step-by-step instructions...
-
-## Examples
-Show example usage with parameters and expected output.
 ```
 
-### Script Format
-
-Scripts must have a `run(params: dict) -> dict` function:
+3. **Create scripts with the standard format:**
 
 ```python
 import sys

@@ -5,6 +5,11 @@ A Model Context Protocol server that enables AI agents to discover, load,
 and execute Agent Skills - organized folders of instructions, scripts, 
 and resources that give agents additional capabilities.
 
+Architecture:
+- skill(name): Load a skill's full instructions (description includes ALL skills)
+- execute_skill_script(skill_name, script_name, params): Run a skill's script
+- get_skill_resource(skill_name, resource_path): Load reference docs or assets
+
 Based on the Agent Skills specification: https://agentskills.io/specification
 
 Author: YoruLabs
@@ -23,9 +28,6 @@ from typing import Any, Optional
 
 import yaml
 from mcp.server.fastmcp import FastMCP
-
-# Initialize the MCP server
-mcp = FastMCP("skills-mcp")
 
 # Configuration
 SKILLS_DIR = os.environ.get("SKILLS_DIR", os.path.join(os.path.dirname(__file__), "..", "skills"))
@@ -121,105 +123,102 @@ def list_skill_resources(skill_path: Path) -> dict:
     return resources
 
 
-@mcp.tool()
-def list_skills() -> dict:
+def get_all_skills_metadata() -> list[dict]:
     """
-    List all available skills with their name and description.
-    
-    START HERE: This is the first tool to call when using Skills MCP.
-    It returns the name and description of each skill, which is the first
-    level of progressive disclosure. Use this to discover what skills are
-    available before loading or executing them.
-    
-    After finding a relevant skill, use `get_skill` to load its full instructions.
+    Get metadata (name and description) for all available skills.
     
     Returns:
-        dict: List of skills with name, description, and path
-    
-    Example response:
-        {
-            "status": "success",
-            "count": 2,
-            "skills": [
-                {
-                    "name": "data-analysis",
-                    "description": "Analyze CSV and Excel files with pandas...",
-                    "path": "/skills/data-analysis"
-                },
-                ...
-            ]
-        }
+        List of dicts with name and description for each skill
     """
-    try:
-        skills = []
-        skills_path = Path(SKILLS_DIR)
+    skills = []
+    skills_path = Path(SKILLS_DIR)
+    
+    if not skills_path.exists():
+        return skills
+    
+    for skill_dir in sorted(skills_path.iterdir()):
+        if not skill_dir.is_dir():
+            continue
         
-        for skill_dir in skills_path.iterdir():
-            if not skill_dir.is_dir():
-                continue
-            
-            skill_md = skill_dir / "SKILL.md"
-            if not skill_md.exists():
-                continue
-            
-            # Read and parse SKILL.md
+        skill_md = skill_dir / "SKILL.md"
+        if not skill_md.exists():
+            continue
+        
+        try:
             content = skill_md.read_text()
             frontmatter, _ = parse_skill_frontmatter(content)
             
-            # Extract name and description (required fields)
             name = frontmatter.get("name", skill_dir.name)
             description = frontmatter.get("description", "No description provided")
             
             skills.append({
                 "name": name,
-                "description": description,
-                "path": str(skill_dir)
+                "description": description
             })
-        
-        return {
-            "status": "success",
-            "count": len(skills),
-            "skills": skills,
-            "hint": "Use get_skill(name) to load full instructions for a specific skill"
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": f"Failed to list skills: {str(e)}"
-        }
+        except Exception:
+            # Skip skills that can't be read
+            continue
+    
+    return skills
+
+
+def build_skill_tool_description() -> str:
+    """
+    Build the dynamic description for the skill tool that includes all available skills.
+    
+    Returns:
+        Formatted description string with all skill names and descriptions
+    """
+    skills = get_all_skills_metadata()
+    
+    base_description = """Load a skill's full instructions and available resources.
+
+This tool provides access to specialized skills that extend agent capabilities.
+Each skill contains instructions, and optionally scripts, references, and assets.
+
+"""
+    
+    if skills:
+        base_description += "**Available skills:**\n"
+        for skill in skills:
+            # Truncate description if too long for the tool description
+            desc = skill["description"]
+            if len(desc) > 150:
+                desc = desc[:147] + "..."
+            base_description += f"- **{skill['name']}**: {desc}\n"
+        base_description += "\n"
+    else:
+        base_description += "**No skills currently available.**\n\n"
+    
+    base_description += """After loading a skill, use `execute_skill_script()` to run any scripts,
+or `get_skill_resource()` to load additional reference documents."""
+    
+    return base_description
+
+
+# Initialize the MCP server
+mcp = FastMCP("skills-mcp")
 
 
 @mcp.tool()
-def get_skill(name: str, include_resources: bool = True) -> dict:
+def skill(name: str) -> dict:
     """
-    Load a skill's full SKILL.md content and metadata.
-    
-    SECOND STEP: Call this after finding a skill via `list_skills`.
-    This loads the full instructions (second level of progressive disclosure).
-    The instructions tell you how to use the skill and what scripts are available.
-    
-    After loading the skill, use `execute_skill_script` to run any scripts
-    mentioned in the instructions.
+    Load a skill's full instructions and available resources.
+
+    This tool provides access to specialized skills that extend agent capabilities.
+    Each skill contains instructions, and optionally scripts, references, and assets.
+
+    **Available skills:**
+    (Skills are dynamically loaded - call this tool to see current skills)
+
+    After loading a skill, use `execute_skill_script()` to run any scripts,
+    or `get_skill_resource()` to load additional reference documents.
     
     Args:
-        name: The skill name (e.g., "data-analysis")
-        include_resources: Whether to list available scripts/references/assets (default: True)
+        name: The skill name to load (e.g., "hello-world", "slack-message")
     
     Returns:
         dict: Skill metadata, full instructions, and available resources
-    
-    Example response:
-        {
-            "status": "success",
-            "name": "data-analysis",
-            "description": "Analyze CSV files...",
-            "instructions": "# Data Analysis\\n\\n## How to use...",
-            "resources": {
-                "scripts": ["analyze.py", "visualize.py"],
-                "references": ["api_reference.md"],
-                "assets": ["template.json"]
-            }
-        }
     """
     try:
         # Validate name
@@ -234,9 +233,13 @@ def get_skill(name: str, include_resources: bool = True) -> dict:
         skill_md = skill_path / "SKILL.md"
         
         if not skill_path.exists() or not skill_md.exists():
+            # Return available skills in error message
+            available = get_all_skills_metadata()
+            available_names = [s["name"] for s in available]
             return {
                 "status": "error",
-                "message": f"Skill '{name}' not found. Use list_skills() to see available skills."
+                "message": f"Skill '{name}' not found.",
+                "available_skills": available_names
             }
         
         # Read and parse SKILL.md
@@ -248,6 +251,7 @@ def get_skill(name: str, include_resources: bool = True) -> dict:
             "name": frontmatter.get("name", name),
             "description": frontmatter.get("description", "No description"),
             "instructions": body,
+            "resources": list_skill_resources(skill_path),
             "metadata": frontmatter.get("metadata", {}),
         }
         
@@ -261,10 +265,9 @@ def get_skill(name: str, include_resources: bool = True) -> dict:
         if "allowed-tools" in frontmatter:
             result["allowed_tools"] = frontmatter["allowed-tools"]
         
-        # List available resources
-        if include_resources:
-            result["resources"] = list_skill_resources(skill_path)
-            result["hint"] = "Use execute_skill_script(skill_name, script_name, params) to run a script"
+        # Add hints for next steps
+        if result["resources"]["scripts"]:
+            result["hint"] = f"Use execute_skill_script('{name}', '<script_name>', params) to run a script"
         
         return result
     except Exception as e:
@@ -274,20 +277,160 @@ def get_skill(name: str, include_resources: bool = True) -> dict:
         }
 
 
+# Update the skill tool's docstring dynamically at module load time
+# This ensures the tool description always reflects current skills
+def _update_skill_docstring():
+    """Update the skill function's docstring with current skills."""
+    skill.__doc__ = build_skill_tool_description() + """
+    
+    Args:
+        name: The skill name to load (e.g., "hello-world", "slack-message")
+    
+    Returns:
+        dict: Skill metadata, full instructions, and available resources
+    """
+
+_update_skill_docstring()
+
+
+@mcp.tool()
+def execute_skill_script(
+    skill_name: str,
+    script_name: str,
+    params: dict = None
+) -> dict:
+    """
+    Execute a script from a skill's scripts/ directory.
+    
+    Scripts are Python files that follow a standard format with a `run(params)` function.
+    The script receives parameters as a dict and returns a dict result.
+    
+    Call `skill(name)` first to see available scripts for a skill.
+    
+    Args:
+        skill_name: The skill name (e.g., "hello-world")
+        script_name: The script filename (e.g., "greet.py")
+        params: Optional dict of parameters to pass to the script
+    
+    Returns:
+        dict: Script execution result with status and output
+    
+    Example:
+        execute_skill_script("hello-world", "greet.py", {"name": "Alice"})
+    """
+    try:
+        # Validate skill name
+        is_valid, error = validate_skill_name(skill_name)
+        if not is_valid:
+            return {
+                "status": "error",
+                "message": f"Invalid skill name: {error}"
+            }
+        
+        skill_path = get_skill_path(skill_name)
+        
+        if not skill_path.exists():
+            return {
+                "status": "error",
+                "message": f"Skill '{skill_name}' not found"
+            }
+        
+        # Sanitize script name
+        if not script_name or ".." in script_name or "/" in script_name:
+            return {
+                "status": "error",
+                "message": "Invalid script name"
+            }
+        
+        script_path = skill_path / "scripts" / script_name
+        
+        if not script_path.exists():
+            # List available scripts
+            scripts_dir = skill_path / "scripts"
+            available = []
+            if scripts_dir.exists():
+                available = [f.name for f in scripts_dir.iterdir() if f.is_file() and f.suffix == ".py"]
+            
+            return {
+                "status": "error",
+                "message": f"Script '{script_name}' not found in skill '{skill_name}'",
+                "available_scripts": available
+            }
+        
+        # Prepare parameters
+        params = params or {}
+        params_json = json.dumps(params)
+        
+        # Execute the script
+        try:
+            result = subprocess.run(
+                [sys.executable, str(script_path), params_json],
+                capture_output=True,
+                text=True,
+                timeout=60,  # 60 second timeout
+                cwd=str(skill_path)
+            )
+            
+            # Parse output
+            if result.returncode == 0:
+                try:
+                    output = json.loads(result.stdout.strip()) if result.stdout.strip() else {}
+                    return {
+                        "status": "success",
+                        "result": output
+                    }
+                except json.JSONDecodeError:
+                    return {
+                        "status": "success",
+                        "result": {
+                            "output": result.stdout.strip()
+                        }
+                    }
+            else:
+                return {
+                    "status": "error",
+                    "message": "Script execution failed",
+                    "stderr": result.stderr,
+                    "stdout": result.stdout,
+                    "return_code": result.returncode
+                }
+        except subprocess.TimeoutExpired:
+            return {
+                "status": "error",
+                "message": "Script execution timed out (60s limit)"
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Script execution error: {str(e)}"
+            }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Failed to execute script: {str(e)}"
+        }
+
+
 @mcp.tool()
 def get_skill_resource(skill_name: str, resource_path: str) -> dict:
     """
     Load a specific resource file from a skill (reference docs, assets, etc.).
     
-    OPTIONAL: Use this to load additional documentation or assets referenced
-    in the skill's instructions. This is the third level of progressive disclosure.
+    Use this to load additional documentation or assets referenced in the skill's
+    instructions. Resources are organized in directories:
+    - references/ - Documentation, API specs, schemas
+    - assets/ - Templates, data files, images
+    - scripts/ - View script source code (use execute_skill_script to run)
     
     Args:
         skill_name: The skill name (e.g., "data-analysis")
-        resource_path: Relative path to resource (e.g., "references/api.md" or "assets/template.json")
+        resource_path: Relative path to resource (e.g., "references/api.md")
     
     Returns:
         dict: Resource content and metadata
+    
+    Example:
+        get_skill_resource("data-analysis", "references/schema.md")
     """
     try:
         # Validate skill name
@@ -319,27 +462,46 @@ def get_skill_resource(skill_name: str, resource_path: str) -> dict:
         if not any(resource_path.startswith(prefix) for prefix in allowed_prefixes):
             return {
                 "status": "error",
-                "message": f"Resource must be in one of: {allowed_prefixes}"
+                "message": f"Resource path must start with one of: {', '.join(allowed_prefixes)}"
             }
         
         full_path = skill_path / resource_path
         
         if not full_path.exists():
+            # List available resources
+            resources = list_skill_resources(skill_path)
             return {
                 "status": "error",
-                "message": f"Resource '{resource_path}' not found in skill '{skill_name}'"
+                "message": f"Resource '{resource_path}' not found",
+                "available_resources": resources
             }
         
-        # Read the resource
-        content = full_path.read_text()
+        if not full_path.is_file():
+            return {
+                "status": "error",
+                "message": "Path is not a file"
+            }
         
-        return {
-            "status": "success",
-            "skill_name": skill_name,
-            "resource_path": resource_path,
-            "content": content,
-            "size_bytes": len(content)
-        }
+        # Read the file
+        try:
+            content = full_path.read_text()
+            return {
+                "status": "success",
+                "path": resource_path,
+                "filename": full_path.name,
+                "content": content,
+                "size_bytes": len(content.encode('utf-8'))
+            }
+        except UnicodeDecodeError:
+            # Binary file - return metadata only
+            return {
+                "status": "success",
+                "path": resource_path,
+                "filename": full_path.name,
+                "content": "[Binary file - cannot display as text]",
+                "size_bytes": full_path.stat().st_size,
+                "is_binary": True
+            }
     except Exception as e:
         return {
             "status": "error",
@@ -347,153 +509,10 @@ def get_skill_resource(skill_name: str, resource_path: str) -> dict:
         }
 
 
-def _run_script_subprocess(script_path: str, params_json: str, cwd: str, timeout: int) -> dict:
-    """
-    Run the script subprocess synchronously.
-    This function is designed to be called via asyncio.to_thread() to avoid blocking the event loop.
-    
-    Args:
-        script_path: Path to the script file
-        params_json: JSON string of parameters
-        cwd: Working directory for the subprocess
-        timeout: Timeout in seconds
-    
-    Returns:
-        dict: Result containing stdout, stderr, and return_code
-    """
-    result = subprocess.run(
-        [sys.executable, script_path, params_json],
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        cwd=cwd
-    )
-    return {
-        "stdout": result.stdout.strip(),
-        "stderr": result.stderr.strip(),
-        "return_code": result.returncode
-    }
-
-
-@mcp.tool()
-async def execute_skill_script(
-    skill_name: str, 
-    script_name: str, 
-    params: dict = None
-) -> dict:
-    """
-    Execute a pre-built script from a skill's scripts/ directory.
-    
-    THIRD STEP: Call this after loading a skill with `get_skill` to run
-    one of its scripts. The skill's instructions will tell you which
-    scripts are available and what parameters they accept.
-    
-    Scripts must have a `run(params: dict) -> dict` function as their entry point.
-    
-    Args:
-        skill_name: The skill name (e.g., "data-analysis")
-        script_name: Name of script file in scripts/ directory (e.g., "analyze.py")
-        params: Optional dictionary of parameters to pass to the script's run() function
-    
-    Returns:
-        dict: Execution result including output and any errors
-    
-    Example:
-        execute_skill_script("data-analysis", "analyze.py", {"file_path": "/data/sales.csv"})
-    """
-    try:
-        # Validate skill name
-        is_valid, error = validate_skill_name(skill_name)
-        if not is_valid:
-            return {
-                "status": "error",
-                "message": f"Invalid skill name: {error}"
-            }
-        
-        skill_path = get_skill_path(skill_name)
-        
-        if not skill_path.exists():
-            return {
-                "status": "error",
-                "message": f"Skill '{skill_name}' not found. Use list_skills() first."
-            }
-        
-        # Validate script name (prevent directory traversal)
-        if "/" in script_name or "\\" in script_name or ".." in script_name:
-            return {
-                "status": "error",
-                "message": "Invalid script name"
-            }
-        
-        script_path = skill_path / "scripts" / script_name
-        
-        if not script_path.exists():
-            # List available scripts to help the user
-            scripts_dir = skill_path / "scripts"
-            available = []
-            if scripts_dir.exists():
-                available = [f.name for f in scripts_dir.iterdir() if f.is_file() and f.suffix == ".py"]
-            
-            return {
-                "status": "error",
-                "message": f"Script '{script_name}' not found in skill '{skill_name}'",
-                "available_scripts": available
-            }
-        
-        # Prepare parameters
-        params_json = json.dumps(params or {})
-        
-        # Execute the script in a separate thread to avoid blocking
-        try:
-            result = await asyncio.to_thread(
-                _run_script_subprocess,
-                str(script_path),
-                params_json,
-                str(skill_path),
-                300  # 5 minute timeout
-            )
-        except subprocess.TimeoutExpired:
-            return {
-                "status": "error",
-                "message": f"Script '{script_name}' timed out after 5 minutes"
-            }
-        
-        # Parse the output
-        output = result["stdout"]
-        error = result["stderr"]
-        
-        if result["return_code"] != 0:
-            return {
-                "status": "error",
-                "message": "Script execution failed",
-                "error": error,
-                "output": output,
-                "return_code": result["return_code"]
-            }
-        
-        # Try to parse output as JSON
-        try:
-            output_data = json.loads(output) if output else {}
-        except json.JSONDecodeError:
-            output_data = {"raw_output": output}
-        
-        return {
-            "status": "success",
-            "message": f"Script '{script_name}' executed successfully",
-            "skill_name": skill_name,
-            "script_name": script_name,
-            "result": output_data,
-            "stderr": error if error else None
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": f"Failed to execute script: {str(e)}"
-        }
-
-
 def main():
-    """Run the MCP server."""
+    """Run the Skills MCP server."""
+    # Update skill docstring before starting
+    _update_skill_docstring()
     mcp.run()
 
 

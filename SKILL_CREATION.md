@@ -2,6 +2,18 @@
 
 This guide provides instructions for creating effective skills for Skills-MCP. Use this guide when creating a new skill or updating an existing skill that extends agent capabilities with specialized knowledge, workflows, or tool integrations.
 
+## MCP Tools Overview
+
+Skills-MCP provides three tools:
+
+| Tool | Purpose |
+|------|--------|
+| `skill(name)` | Load a skill's full instructions. The tool description contains ALL skill names and descriptions. |
+| `execute_skill_script(skill_name, script_name, params)` | Run a script from a skill's scripts/ directory |
+| `get_skill_resource(skill_name, resource_path)` | Load reference docs or assets from a skill |
+
+**Important**: The `skill` tool description is **dynamically generated** to always include the name and description of every available skill. This means agents can see all available skills just by reading the tool description, without making any tool calls.
+
 ## About Skills
 
 Skills are modular, self-contained packages that extend agent capabilities by providing specialized knowledge, workflows, and tools. Think of them as "onboarding guides" for specific domains or tasks—they transform a general-purpose agent into a specialized agent equipped with procedural knowledge.
@@ -133,7 +145,7 @@ if __name__ == "__main__":
 **Benefits:**
 - Token efficient (executed without loading into context)
 - Deterministic and testable
-- Can be called via `execute_skill_script` MCP tool
+- Can be called via `execute_skill_script()` MCP tool
 
 #### References (`references/`)
 
@@ -165,9 +177,9 @@ Skills use a three-level loading system to manage context efficiently:
 
 | Level | Content | When Loaded | Size Guideline |
 |-------|---------|-------------|----------------|
-| **1** | Metadata (name + description) | Always in context | ~100 tokens |
-| **2** | SKILL.md body | When skill activates | <5000 tokens |
-| **3** | Bundled resources | As needed by agent | Unlimited |
+| **1** | Metadata (name + description) | Always in `skill` tool description | ~100 tokens per skill |
+| **2** | SKILL.md body | When `skill(name)` is called | <5000 tokens |
+| **3** | Bundled resources | When `get_skill_resource()` is called | Unlimited |
 
 ### Progressive Disclosure Patterns
 
@@ -384,8 +396,12 @@ A minimal example skill demonstrating the basic structure.
 
 ## How to Use
 
-Run the greeting script with a name parameter:
+**Step 1**: Load the skill to see instructions and available scripts:
+```
+skill("hello-world")
+```
 
+**Step 2**: Run the greeting script with parameters:
 ```
 execute_skill_script("hello-world", "greet.py", {"name": "Alice"})
 ```
@@ -430,4 +446,4 @@ if __name__ == "__main__":
 ## Related Resources
 
 - [Agent Skills Specification](https://agentskills.io/specification)
-- [Skills-MCP Repository](https://github.com/YoruLabs/Skills-MCP)
+- [Skills-MCP Repository](https://github.com/Livus-AI/Skills-MCP)
