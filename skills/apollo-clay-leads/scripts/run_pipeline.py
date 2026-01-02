@@ -8,7 +8,6 @@ Usage:
     python run_pipeline.py --icp icp_v1 --limit 50
     python run_pipeline.py --csv path/to/apollo.csv
     python run_pipeline.py --query "CTOs at SaaS startups" --dry-run
-    python run_pipeline.py --query "VPs" --limit 20 --linear-issue LIV-56
 """
 
 import sys
@@ -55,7 +54,6 @@ def run_pipeline(
     csv_path: Optional[str] = None,
     limit: int = 100,
     dry_run: bool = False,
-    linear_issue: Optional[str] = None,
     skip_enrichment: bool = False,
     skip_export: bool = False
 ) -> Dict[str, Any]:
@@ -68,7 +66,6 @@ def run_pipeline(
         csv_path: Path to Apollo CSV export (fallback)
         limit: Maximum leads to fetch from API
         dry_run: If True, use mock data instead of real API calls
-        linear_issue: Optional Linear issue ID for markdown export
         skip_enrichment: Skip Clay enrichment step
         skip_export: Skip export step
     
@@ -181,7 +178,7 @@ def run_pipeline(
         # Step 4: Export artifacts
         if not skip_export:
             logger.info("STEP 4: Exporting artifacts...")
-            export_result = export_all(run_id=run_id, linear_issue=linear_issue)
+            export_result = export_all(run_id=run_id)
             results["steps"]["export"] = export_result
             
             if export_result.get("status") == "error":
@@ -206,8 +203,6 @@ def run_pipeline(
         logger.info(f"Run ID: {run_id}")
         logger.info(f"Elapsed: {elapsed:.1f}s")
         logger.info(f"Leads processed: {leads_count}")
-        if linear_issue:
-            logger.info(f"Linear issue: {linear_issue}")
         logger.info("=" * 60)
         
         results["status"] = "success"
@@ -234,7 +229,6 @@ def run(params: dict = None) -> dict:
         csv_path=params.get("csv_path") or params.get("csv"),
         limit=params.get("limit", 100),
         dry_run=params.get("dry_run", False),
-        linear_issue=params.get("linear_issue"),
         skip_enrichment=params.get("skip_enrichment", False),
         skip_export=params.get("skip_export", False)
     )
@@ -258,9 +252,6 @@ Examples:
 
   # Dry-run with mock data (no API calls)
   python run_pipeline.py --query "CTOs at startups" --dry-run
-
-  # With Linear issue tracking
-  python run_pipeline.py --query "VPs" --limit 20 --linear-issue LIV-56
         """
     )
     
@@ -272,7 +263,6 @@ Examples:
     # Options
     parser.add_argument("--limit", "-n", type=int, default=100, help="Max leads to fetch (default: 100)")
     parser.add_argument("--dry-run", action="store_true", help="Use mock data, no external API calls")
-    parser.add_argument("--linear-issue", help="Linear issue ID for markdown summary (e.g., LIV-56)")
     
     # Skip flags
     parser.add_argument("--skip-enrichment", action="store_true", help="Skip Clay enrichment")
@@ -289,7 +279,6 @@ Examples:
         csv_path=args.csv,
         limit=args.limit,
         dry_run=args.dry_run,
-        linear_issue=args.linear_issue,
         skip_enrichment=args.skip_enrichment,
         skip_export=args.skip_export
     )

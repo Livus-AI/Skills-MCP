@@ -28,14 +28,6 @@ python3 skills/apollo-clay-leads/scripts/run_pipeline.py \
   --dry-run
 ```
 
-**With Linear issue tracking:**
-```bash
-python3 skills/apollo-clay-leads/scripts/run_pipeline.py \
-  --query "VPs of Engineering" \
-  --limit 50 \
-  --linear-issue LIV-56
-```
-
 ## CLI Reference
 
 ```
@@ -49,7 +41,6 @@ Input Sources (choose one):
 Options:
   --limit, -n INT     Max leads to fetch (default: 100)
   --dry-run           Use mock data, no external API calls
-  --linear-issue ID   Linear issue ID for markdown summary
   --skip-enrichment   Skip Clay enrichment step
   --skip-export       Skip export step
   --json              Output result as JSON
@@ -73,7 +64,7 @@ After running, check the `output/` directory:
 |------|-------------|
 | `leads.csv` | Scored leads with all fields |
 | `leads.json` | Structured lead data with scores |
-| `linear_update.md` | Summary for Linear issue updates |
+| `summary.md` | Summary with top 10 leads and stats |
 
 ## Natural Language Query Examples
 
@@ -99,7 +90,7 @@ The pipeline parses natural language queries into Apollo API filters:
 5. Export artifacts:
    - output/leads.csv
    - output/leads.json
-   - output/linear_update.md
+   - output/summary.md
 ```
 
 ## Scoring
@@ -115,32 +106,6 @@ Each lead gets a `fit_score` (0-100) with transparent `score_breakdown`:
 | Location match | +10 |
 | Verified email | +5 |
 | Has LinkedIn | +5 |
-
-## ICP Configuration
-
-Create custom ICPs in `scripts/icp_configs/<name>.json`:
-
-```json
-{
-  "name": "my_icp",
-  "description": "Target audience description",
-  "filters": {
-    "person_titles": ["CTO", "VP Engineering"],
-    "person_seniorities": ["c_suite", "vp", "director"],
-    "organization_locations": ["United States"],
-    "organization_num_employees_ranges": ["51,200", "201,500"]
-  },
-  "scoring_weights": {
-    "title_match": 25,
-    "seniority_match": 20,
-    "industry_match": 20,
-    "company_size_match": 15,
-    "location_match": 10,
-    "verified_email": 5,
-    "has_linkedin": 5
-  }
-}
-```
 
 ## MCP Usage
 

@@ -1,10 +1,10 @@
 """
-Export Leads to CSV, JSON, and Linear-ready Markdown
+Export Leads to CSV, JSON, and Markdown Summary
 
 Generates output files:
 - output/leads.csv
 - output/leads.json
-- output/linear_update.md (summary + top 10 leads + stats)
+- output/summary.md (summary + top 10 leads + stats)
 """
 
 import sys
@@ -162,14 +162,13 @@ def export_json(run_id: str, filename: str = "leads.json") -> str:
     return filepath
 
 
-def export_linear_markdown(run_id: str, linear_issue: Optional[str] = None, filename: str = "linear_update.md") -> str:
+def export_markdown(run_id: str, filename: str = "summary.md") -> str:
     """
-    Export Linear-ready markdown summary.
+    Export markdown summary.
     
     Args:
         run_id: Pipeline run ID
-        linear_issue: Optional Linear issue ID (e.g., LIV-56)
-        filename: Output filename (default: linear_update.md)
+        filename: Output filename (default: summary.md)
     
     Returns:
         Path to exported markdown file
@@ -181,12 +180,7 @@ def export_linear_markdown(run_id: str, linear_issue: Optional[str] = None, file
     # Build markdown content
     lines = []
     
-    # Header with optional Linear issue
-    if linear_issue:
-        lines.append(f"# Lead Generation Update - {linear_issue}")
-    else:
-        lines.append("# Lead Generation Update")
-    
+    lines.append("# Lead Generation Summary")
     lines.append("")
     lines.append(f"**Run ID:** `{run_id}`")
     lines.append(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M')}")
@@ -250,7 +244,7 @@ def export_linear_markdown(run_id: str, linear_issue: Optional[str] = None, file
     lines.append("")
     lines.append("- `output/leads.csv` - Full lead list with scores")
     lines.append("- `output/leads.json` - Structured lead data")
-    lines.append("- `output/linear_update.md` - This summary")
+    lines.append("- `output/summary.md` - This summary")
     lines.append("")
     
     filepath = os.path.join(get_output_dir(), filename)
@@ -258,17 +252,16 @@ def export_linear_markdown(run_id: str, linear_issue: Optional[str] = None, file
     with open(filepath, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
     
-    logger.info(f"Exported Linear summary to {filepath}")
+    logger.info(f"Exported summary to {filepath}")
     return filepath
 
 
-def export_all(run_id: str, linear_issue: Optional[str] = None) -> Dict[str, Any]:
+def export_all(run_id: str) -> Dict[str, Any]:
     """
-    Export all artifacts: CSV, JSON, and Linear markdown.
+    Export all artifacts: CSV, JSON, and markdown summary.
     
     Args:
         run_id: Pipeline run ID
-        linear_issue: Optional Linear issue ID
     
     Returns:
         dict with paths to exported files
@@ -276,7 +269,7 @@ def export_all(run_id: str, linear_issue: Optional[str] = None) -> Dict[str, Any
     try:
         csv_path = export_csv(run_id)
         json_path = export_json(run_id)
-        md_path = export_linear_markdown(run_id, linear_issue)
+        md_path = export_markdown(run_id)
         
         # Get stats
         merged = get_merged_leads(run_id)
@@ -310,7 +303,6 @@ def run(params: dict = None) -> dict:
         return {"status": "error", "message": "run_id parameter required"}
     
     export_type = params.get("type", "all")
-    linear_issue = params.get("linear_issue")
     
     if export_type == "csv":
         try:
@@ -328,13 +320,13 @@ def run(params: dict = None) -> dict:
     
     elif export_type == "markdown":
         try:
-            md_path = export_linear_markdown(run_id, linear_issue)
+            md_path = export_markdown(run_id)
             return {"status": "success", "markdown_path": md_path}
         except Exception as e:
             return {"status": "error", "message": str(e)}
     
     else:  # all
-        return export_all(run_id, linear_issue)
+        return export_all(run_id)
 
 
 if __name__ == "__main__":
