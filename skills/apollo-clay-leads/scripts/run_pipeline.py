@@ -4,10 +4,9 @@ Lead Generation Pipeline Orchestrator
 Runs the full pipeline: ingest → enrich → score → export
 
 Usage:
-    python run_pipeline.py --query "administrators from large marketing companies in US" --limit 30
+    python run_pipeline.py --query "administrators from large farms in brazil" --limit 30
     python run_pipeline.py --icp icp_v1 --limit 50
     python run_pipeline.py --csv path/to/apollo.csv
-    python run_pipeline.py --query "CTOs at SaaS startups" --dry-run
 """
 
 import sys
@@ -53,7 +52,6 @@ def run_pipeline(
     icp_name: str = "icp_v1",
     csv_path: Optional[str] = None,
     limit: int = 100,
-    dry_run: bool = False,
     skip_enrichment: bool = False,
     skip_export: bool = False
 ) -> Dict[str, Any]:
@@ -65,7 +63,6 @@ def run_pipeline(
         icp_name: Name of ICP config to use (fallback if no query)
         csv_path: Path to Apollo CSV export (fallback)
         limit: Maximum leads to fetch from API
-        dry_run: If True, use mock data instead of real API calls
         skip_enrichment: Skip Clay enrichment step
         skip_export: Skip export step
     
@@ -75,8 +72,6 @@ def run_pipeline(
     start_time = datetime.now()
     logger.info("=" * 60)
     logger.info("LEAD GENERATION PIPELINE")
-    if dry_run:
-        logger.info("🔧 DRY-RUN MODE (using mock data)")
     logger.info("=" * 60)
     
     try:
@@ -90,14 +85,14 @@ def run_pipeline(
             filters = parse_query_to_filters(query)
             logger.info(f"Parsed filters: {json.dumps(filters, indent=2)}")
             icp_config = {"name": "query", "description": query, "filters": filters}
-            source = "mock_data" if dry_run else "apollo_api"
+            source = "apollo_api"
         elif csv_path:
             icp_config = load_icp_config(icp_name)
             source = "csv_import"
             logger.info(f"CSV: {csv_path}")
         else:
             icp_config = load_icp_config(icp_name)
-            source = "mock_data" if dry_run else "apollo_api"
+            source = "apollo_api"
             logger.info(f"ICP: {icp_name} - {icp_config.get('description', '')}")
         
         # Create pipeline run
@@ -110,7 +105,6 @@ def run_pipeline(
             "query": query,
             "icp_name": icp_config.get("name", icp_name),
             "source": source,
-            "dry_run": dry_run,
             "steps": {}
         }
         
@@ -123,8 +117,7 @@ def run_pipeline(
                 icp_name=icp_name if not query else None,
                 query=query,
                 limit=limit,
-                run_id=run_id,
-                dry_run=dry_run
+                run_id=run_id
             )
         
         results["steps"]["ingest"] = ingest_result
@@ -138,8 +131,8 @@ def run_pipeline(
         logger.info(f"✓ Ingested {leads_count} leads")
         logger.info("-" * 60)
         
-        # Step 2: Enrich via Clay (skip in dry-run or if flag set)
-        if not skip_enrichment and not dry_run:
+        # Step 2: Enrich via Clay
+        if not skip_enrichment:
             logger.info("STEP 2: Enriching leads via Clay...")
             enrich_result = enrich_leads(run_id=run_id)
             results["steps"]["enrich"] = enrich_result
@@ -152,9 +145,8 @@ def run_pipeline(
             else:
                 logger.info(f"✓ Enriched {enrich_result.get('leads_enriched', 0)} leads")
         else:
-            reason = "dry-run mode" if dry_run else "--skip-enrichment"
-            logger.info(f"STEP 2: Enrichment skipped ({reason})")
-            results["steps"]["enrich"] = {"status": "skipped", "reason": reason}
+            logger.info("STEP 2: Enrichment skipped (--skip-enrichment)")
+            results["steps"]["enrich"] = {"status": "skipped", "reason": "--skip-enrichment"}
         
         logger.info("-" * 60)
         
@@ -214,6 +206,9 @@ def run_pipeline(
     except FileNotFoundError as e:
         logger.error(str(e))
         return {"status": "error", "message": str(e)}
+    except ValueError as e:
+        logger.error(str(e))
+        return {"status": "error", "message": str(e)}
     except Exception as e:
         logger.exception("Pipeline failed")
         return {"status": "error", "message": str(e)}
@@ -228,7 +223,6 @@ def run(params: dict = None) -> dict:
         icp_name=params.get("icp", "icp_v1"),
         csv_path=params.get("csv_path") or params.get("csv"),
         limit=params.get("limit", 100),
-        dry_run=params.get("dry_run", False),
         skip_enrichment=params.get("skip_enrichment", False),
         skip_export=params.get("skip_export", False)
     )
@@ -242,16 +236,13 @@ def main():
         epilog="""
 Examples:
   # Natural language query (primary method)
-  python run_pipeline.py --query "administrators from large marketing companies in US" --limit 30
+  python run_pipeline.py --query "administrators from large farms in brazil" --limit 30
 
   # Using ICP config file
   python run_pipeline.py --icp icp_v1 --limit 50
 
   # From CSV export
   python run_pipeline.py --csv path/to/apollo.csv
-
-  # Dry-run with mock data (no API calls)
-  python run_pipeline.py --query "CTOs at startups" --dry-run
         """
     )
     
@@ -262,7 +253,6 @@ Examples:
     
     # Options
     parser.add_argument("--limit", "-n", type=int, default=100, help="Max leads to fetch (default: 100)")
-    parser.add_argument("--dry-run", action="store_true", help="Use mock data, no external API calls")
     
     # Skip flags
     parser.add_argument("--skip-enrichment", action="store_true", help="Skip Clay enrichment")
@@ -278,7 +268,6 @@ Examples:
         icp_name=args.icp,
         csv_path=args.csv,
         limit=args.limit,
-        dry_run=args.dry_run,
         skip_enrichment=args.skip_enrichment,
         skip_export=args.skip_export
     )
