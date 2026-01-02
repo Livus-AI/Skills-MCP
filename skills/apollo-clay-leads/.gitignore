@@ -1,0 +1,10 @@
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Test data
+test_data/
+
+# Output artifacts (generated, not committed)
+# Note: output/ is at repo root level

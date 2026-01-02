@@ -1,0 +1,34 @@
+{
+  "name": "icp_v1",
+  "description": "B2B SaaS decision makers - CTOs, VPs, and Directors of Engineering at mid-market tech companies",
+  "filters": {
+    "person_titles": [
+      "CTO",
+      "Chief Technology Officer",
+      "VP Engineering",
+      "VP of Engineering",
+      "Vice President Engineering",
+      "Head of Engineering",
+      "Director of Engineering",
+      "Engineering Director",
+      "Chief Technical Officer"
+    ],
+    "person_seniorities": ["c_suite", "vp", "director"],
+    "organization_locations": ["United States", "Canada", "United Kingdom"],
+    "organization_num_employees_ranges": ["51,200", "201,500", "501,1000"],
+    "q_organization_keyword_tags": ["SaaS", "Software", "Technology", "B2B"]
+  },
+  "scoring_weights": {
+    "title_match": 25,
+    "seniority_match": 20,
+    "industry_match": 20,
+    "company_size_match": 15,
+    "location_match": 10,
+    "verified_email": 5,
+    "has_linkedin": 5
+  },
+  "apollo_params": {
+    "per_page": 25,
+    "page": 1
+  }
+}

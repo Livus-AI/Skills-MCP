@@ -75,3 +75,10 @@ Thumbs.db
 # workflows/*.py
 # !workflows/example_*.py
 server.log
+
+# Output artifacts
+output/
+
+# SQLite databases
+*.db
+skills/*/data/
