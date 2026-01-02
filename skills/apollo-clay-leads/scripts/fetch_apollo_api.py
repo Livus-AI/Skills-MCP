@@ -86,8 +86,14 @@ def make_request(url: str, data: Dict[str, Any], retries: int = 3) -> Dict[str, 
     """Make HTTP POST request with retries and exponential backoff."""
     headers = {
         "Content-Type": "application/json",
+        "Accept": "application/json",
         "Cache-Control": "no-cache",
-        "X-Api-Key": APOLLO_API_KEY
+        "X-Api-Key": APOLLO_API_KEY,
+        # Browser-like headers to avoid Cloudflare blocking
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Origin": "https://app.apollo.io",
+        "Referer": "https://app.apollo.io/"
     }
     
     for attempt in range(retries):
