@@ -144,7 +144,7 @@ def export_json(run_id: str, filename: str = "leads.json") -> str:
                 "company_name": l.get("company_name"),
                 "company_industry": l.get("company_industry"),
                 "company_size": l.get("company_size"),
-                "location": f"{l.get('city', '')}, {l.get('state', '')}, {l.get('country', '')}".strip(", "),
+                "location": l.get("location") or f"{l.get('city', '')}, {l.get('state', '')}, {l.get('country', '')}".strip(", ") or None,
                 "linkedin_url": l.get("linkedin_url"),
                 "fit_score": l.get("fit_score"),
                 "score_breakdown": l.get("score_reasons", [])

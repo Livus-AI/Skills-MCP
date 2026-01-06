@@ -132,18 +132,22 @@ def generate_id() -> str:
 # ============ Lead Operations ============
 
 def upsert_lead(lead_data: Dict[str, Any], run_id: str) -> str:
-    """Insert or update a lead by email. Returns lead ID."""
+    """Insert or update a lead. Returns lead ID."""
     init_db()
     
     lead_id = lead_data.get("id") or generate_id()
-    email = lead_data.get("email", "").lower().strip()
+    # Handle email: Treat empty string as None to allow multiple leads without email
+    raw_email = lead_data.get("email") or ""
+    email = raw_email.lower().strip() or None
     
     with get_connection() as conn:
         cursor = conn.cursor()
         
-        # Check if lead exists by email
-        cursor.execute("SELECT id FROM leads WHERE email = ?", (email,))
-        existing = cursor.fetchone()
+        # Check if lead exists by email (only if email is present)
+        existing = None
+        if email:
+            cursor.execute("SELECT id FROM leads WHERE email = ?", (email,))
+            existing = cursor.fetchone()
         
         if existing:
             lead_id = existing["id"]

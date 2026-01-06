@@ -281,16 +281,180 @@ def fetch_leads(
         return {"status": "error", "message": str(e)}
 
 
+def enrich_person_with_apollo(lead: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Enrich a single lead using Apollo's /v1/people/match endpoint.
+    
+    This endpoint works on Apollo's FREE tier (uses 1 credit per match).
+    
+    Args:
+        lead: Lead dict with at least name+company or linkedin_url
+    
+    Returns:
+        Enriched lead dict with email, phone, company data
+    """
+    if not APOLLO_API_KEY:
+        raise ValueError("APOLLO_API_KEY not set. Add it to your .env file.")
+    
+    url = f"{APOLLO_API_BASE}/people/match"
+    
+    # Build payload - Apollo accepts various identifiers
+    payload = {
+        "api_key": APOLLO_API_KEY,
+        "reveal_personal_emails": False,
+        "reveal_phone_number": True
+    }
+    
+    # Prefer LinkedIn URL if available (most accurate)
+    if lead.get("linkedin_url"):
+        payload["linkedin_url"] = lead["linkedin_url"]
+    else:
+        # Fall back to name + company
+        if lead.get("first_name"):
+            payload["first_name"] = lead["first_name"]
+        if lead.get("last_name"):
+            payload["last_name"] = lead["last_name"]
+        if lead.get("company_name"):
+            payload["organization_name"] = lead["company_name"]
+        if lead.get("company_domain"):
+            payload["domain"] = lead["company_domain"]
+    
+    try:
+        response = make_request(url, payload)
+        person = response.get("person", {})
+        
+        if not person:
+            logger.warning(f"No match found for {lead.get('full_name', 'unknown')}")
+            return lead  # Return original lead if no match
+        
+        # Merge Apollo data into lead
+        org = person.get("organization", {})
+        
+        enriched = {
+            **lead,
+            "email": person.get("email") or lead.get("email"),
+            "email_verified": person.get("email_status") == "verified",
+            "phone": None,
+            "seniority": person.get("seniority"),
+            "title": person.get("title") or lead.get("title"),
+            "company_name": org.get("name") or lead.get("company_name"),
+            "company_domain": org.get("primary_domain") or lead.get("company_domain"),
+            "company_industry": org.get("industry"),
+            "company_size": _normalize_employee_count(org.get("estimated_num_employees")),
+            "city": person.get("city"),
+            "state": person.get("state"),
+            "country": person.get("country"),
+            "apollo_id": person.get("id"),
+            "enriched": True
+        }
+        
+        # Extract phone if available
+        phones = person.get("phone_numbers", [])
+        if phones:
+            enriched["phone"] = phones[0].get("sanitized_number")
+        
+        logger.info(f"Enriched: {enriched.get('full_name')} -> {enriched.get('email')}")
+        return enriched
+        
+    except HTTPError as e:
+        if e.code == 404:
+            logger.warning(f"No Apollo match for {lead.get('full_name', 'unknown')}")
+            return lead
+        raise
+
+
+def enrich_leads_with_apollo(
+    leads: List[Dict[str, Any]],
+    run_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Enrich multiple leads using Apollo's /v1/people/match endpoint.
+    
+    Uses Apollo FREE tier (1 credit per lead, 100 credits/month free).
+    
+    Args:
+        leads: List of leads to enrich (from Apify or other source)
+        run_id: Optional pipeline run ID for database storage
+    
+    Returns:
+        dict with status, enriched leads count, and leads list
+    """
+    if not APOLLO_API_KEY:
+        raise ValueError("APOLLO_API_KEY not set. Add it to your .env file.")
+    
+    enriched_leads = []
+    enriched_count = 0
+    failed_count = 0
+    
+    for i, lead in enumerate(leads):
+        try:
+            enriched = enrich_person_with_apollo(lead)
+            
+            if enriched.get("enriched"):
+                enriched_count += 1
+            
+            # Store in database if run_id provided
+            if run_id:
+                upsert_lead(enriched, run_id)
+            
+            enriched_leads.append(enriched)
+            
+            # Rate limiting - Apollo allows ~50 requests/minute
+            if (i + 1) % 10 == 0:
+                logger.info(f"Enriched {i + 1}/{len(leads)} leads")
+                time.sleep(1)
+                
+        except Exception as e:
+            logger.warning(f"Failed to enrich lead {i}: {e}")
+            failed_count += 1
+            enriched_leads.append(lead)  # Keep original
+    
+    # Update run stats if provided
+    if run_id:
+        update_run(run_id, leads_fetched=len(enriched_leads))
+    
+    return {
+        "status": "success",
+        "leads": enriched_leads,
+        "enriched_count": enriched_count,
+        "failed_count": failed_count,
+        "total_count": len(enriched_leads),
+        "message": f"Enriched {enriched_count}/{len(leads)} leads with Apollo"
+    }
+
+
+def _normalize_employee_count(count: Optional[int]) -> Optional[str]:
+    """Convert employee count to range string."""
+    if not count:
+        return None
+    if count <= 50:
+        return "1-50"
+    elif count <= 200:
+        return "51-200"
+    elif count <= 500:
+        return "201-500"
+    elif count <= 1000:
+        return "501-1000"
+    else:
+        return "1000+"
+
+
 def run(params: dict = None) -> dict:
     """Entry point for MCP execution."""
     params = params or {}
+    
+    # Check if this is an enrichment request
+    if params.get("enrich") and params.get("leads"):
+        return enrich_leads_with_apollo(
+            leads=params.get("leads"),
+            run_id=params.get("run_id")
+        )
     
     return fetch_leads(
         icp_name=params.get("icp"),
         query=params.get("query"),
         limit=params.get("limit", 100),
-        run_id=params.get("run_id"),
-        dry_run=params.get("dry_run", False)
+        run_id=params.get("run_id")
     )
 
 
@@ -305,3 +469,4 @@ if __name__ == "__main__":
     
     result = run(params)
     print(json.dumps(result, indent=2, default=str))
+

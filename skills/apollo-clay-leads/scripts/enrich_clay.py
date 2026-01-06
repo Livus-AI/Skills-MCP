@@ -48,7 +48,11 @@ def make_request(url: str, data: Dict[str, Any], retries: int = 3) -> Dict[str, 
             with urlopen(req, timeout=30) as response:
                 response_text = response.read().decode("utf-8")
                 if response_text:
-                    return json.loads(response_text)
+                    try:
+                        return json.loads(response_text)
+                    except json.JSONDecodeError:
+                        # Webhook might return plain text like "Accepted"
+                        return {"status": "success", "message": response_text}
                 return {"status": "accepted"}
                 
         except HTTPError as e:
