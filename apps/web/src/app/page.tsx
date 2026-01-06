@@ -9,7 +9,10 @@ import {
   Building2, 
   Loader2, 
   Filter,
-  Users
+  Users,
+  CheckCircle2,
+  Circle,
+  Sparkles
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +24,12 @@ interface Lead {
   location?: string;
 }
 
+interface ProgressStep {
+  id: string;
+  message: string;
+  status: "pending" | "active" | "complete";
+}
+
 export default function Home() {
   const [query, setQuery] = useState("");
   const [limit, setLimit] = useState(5);
@@ -29,6 +38,7 @@ export default function Home() {
   const [hasSearched, setHasSearched] = useState(false);
   const [error, setError] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [progressSteps, setProgressSteps] = useState<ProgressStep[]>([]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,21 +48,67 @@ export default function Home() {
     setError("");
     setHasSearched(true);
     setLeads([]);
+    setProgressSteps([
+      { id: "starting", message: "Starting pipeline...", status: "active" }
+    ]);
 
     try {
-      const res = await fetch("/api/pipeline", {
+      // Use SSE streaming endpoint
+      const response = await fetch("/api/pipeline/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query, limit, useApify: true }),
       });
-      
-      const data = await res.json();
-      
-      if (!data.success) {
-        throw new Error(data.error || "Failed to fetch leads");
+
+      if (!response.body) {
+        throw new Error("No response body");
       }
-      
-      setLeads(data.leads || []);
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            const eventType = line.slice(7);
+            continue;
+          }
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              if (data.step) {
+                setProgressSteps(prev => {
+                  // Mark previous steps as complete
+                  const updated = prev.map(s => ({ ...s, status: "complete" as const }));
+                  // Add new step as active
+                  return [...updated, { id: data.step, message: data.message, status: "active" as const }];
+                });
+              }
+              
+              if (data.leads) {
+                setLeads(data.leads);
+              }
+              
+              if (data.error) {
+                setError(data.message || "Pipeline error");
+              }
+            } catch {}
+          }
+        }
+      }
+
+      // Mark all steps as complete
+      setProgressSteps(prev => prev.map(s => ({ ...s, status: "complete" as const })));
+
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -168,14 +224,48 @@ export default function Home() {
            </div>
         )}
 
-        {/* LOADING STATE - Skeleton */}
+        {/* LOADING STATE - Progress Steps */}
         {loading && (
-          <div className="max-w-5xl mx-auto space-y-4 animate-pulse">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-20 bg-zinc-900/50 rounded-xl border border-zinc-800/50"></div>
-            ))}
-            <div className="text-center text-zinc-500 text-sm mt-4">
-              AI Agent is analyzing query and scraping sources... (approx 30s)
+          <div className="max-w-xl mx-auto">
+            <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 shadow-xl">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-indigo-400 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-white font-semibold">AI Pipeline Running</h3>
+                  <p className="text-zinc-500 text-sm">Processing your request...</p>
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                {progressSteps.map((step, idx) => (
+                  <div 
+                    key={idx} 
+                    className={cn(
+                      "flex items-center gap-3 p-3 rounded-lg transition-all duration-300",
+                      step.status === "active" && "bg-indigo-500/10 border border-indigo-500/20",
+                      step.status === "complete" && "opacity-70"
+                    )}
+                  >
+                    {step.status === "complete" ? (
+                      <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
+                    ) : step.status === "active" ? (
+                      <Loader2 className="w-5 h-5 text-indigo-400 animate-spin shrink-0" />
+                    ) : (
+                      <Circle className="w-5 h-5 text-zinc-600 shrink-0" />
+                    )}
+                    <span className={cn(
+                      "text-sm",
+                      step.status === "active" && "text-white",
+                      step.status === "complete" && "text-zinc-400",
+                      step.status === "pending" && "text-zinc-600"
+                    )}>
+                      {step.message}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
