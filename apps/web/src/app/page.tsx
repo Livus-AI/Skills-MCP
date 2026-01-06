@@ -12,7 +12,10 @@ import {
   Users,
   CheckCircle2,
   Circle,
-  Sparkles
+  Sparkles,
+  MessageCircleQuestion,
+  ArrowRight,
+  SkipForward
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -30,34 +33,97 @@ interface ProgressStep {
   status: "pending" | "active" | "complete";
 }
 
+interface ClarifyQuestion {
+  id: string;
+  question: string;
+  options?: string[];
+}
+
+interface ClarificationState {
+  isOpen: boolean;
+  questions: ClarifyQuestion[];
+  answers: Record<string, string>;
+  reason?: string;
+}
+
 export default function Home() {
   const [query, setQuery] = useState("");
   const [limit, setLimit] = useState(5);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(false);
+  const [clarifying, setClarifying] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [error, setError] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [progressSteps, setProgressSteps] = useState<ProgressStep[]>([]);
+  const [clarification, setClarification] = useState<ClarificationState>({
+    isOpen: false,
+    questions: [],
+    answers: {},
+  });
 
+  // Phase 1: Check if query needs clarification
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
 
-    setLoading(true);
+    setClarifying(true);
     setError("");
+
+    try {
+      const res = await fetch("/api/clarify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+      });
+
+      const data = await res.json();
+
+      if (data.needs_clarification && data.questions?.length > 0) {
+        // Show clarification panel
+        setClarification({
+          isOpen: true,
+          questions: data.questions,
+          answers: {},
+          reason: data.reason,
+        });
+        setClarifying(false);
+        return;
+      }
+
+      // No clarification needed, proceed to search
+      setClarifying(false);
+      runSearch(query);
+    } catch (err: any) {
+      setClarifying(false);
+      // If clarify fails, just run the search
+      runSearch(query);
+    }
+  };
+
+  // Handle answer selection
+  const setAnswer = (questionId: string, value: string) => {
+    setClarification(prev => ({
+      ...prev,
+      answers: { ...prev.answers, [questionId]: value },
+    }));
+  };
+
+  // Phase 2: Run search with enriched query
+  const runSearch = async (enrichedQuery: string) => {
+    setLoading(true);
     setHasSearched(true);
     setLeads([]);
+    setClarification({ isOpen: false, questions: [], answers: {} });
     setProgressSteps([
       { id: "starting", message: "Starting pipeline...", status: "active" }
     ]);
 
     try {
-      // Use SSE streaming endpoint
       const response = await fetch("/api/pipeline/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, limit, useApify: true }),
+        body: JSON.stringify({ query: enrichedQuery, limit, useApify: true }),
       });
 
       if (!response.body) {
@@ -77,36 +143,23 @@ export default function Home() {
         buffer = lines.pop() || "";
 
         for (const line of lines) {
-          if (line.startsWith("event: ")) {
-            const eventType = line.slice(7);
-            continue;
-          }
+          if (line.startsWith("event: ")) continue;
           if (line.startsWith("data: ")) {
             try {
               const data = JSON.parse(line.slice(6));
-              
               if (data.step) {
                 setProgressSteps(prev => {
-                  // Mark previous steps as complete
                   const updated = prev.map(s => ({ ...s, status: "complete" as const }));
-                  // Add new step as active
                   return [...updated, { id: data.step, message: data.message, status: "active" as const }];
                 });
               }
-              
-              if (data.leads) {
-                setLeads(data.leads);
-              }
-              
-              if (data.error) {
-                setError(data.message || "Pipeline error");
-              }
+              if (data.leads) setLeads(data.leads);
+              if (data.error) setError(data.message || "Pipeline error");
             } catch {}
           }
         }
       }
 
-      // Mark all steps as complete
       setProgressSteps(prev => prev.map(s => ({ ...s, status: "complete" as const })));
 
     } catch (err: any) {
@@ -114,6 +167,39 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Build enriched query from answers
+  const handleContinueWithAnswers = () => {
+    const parts = [query];
+    const { answers } = clarification;
+    
+    if (answers.location && answers.location !== "Other") {
+      parts.push(`in ${answers.location}`);
+    }
+    if (answers.industry) {
+      parts.push(`in ${answers.industry} industry`);
+    }
+    if (answers.company_size) {
+      parts.push(`at ${answers.company_size} companies`);
+    }
+    if (answers.seniority) {
+      parts.push(`${answers.seniority} level`);
+    }
+    
+    // Add any custom text answers
+    Object.entries(answers).forEach(([key, val]) => {
+      if (!["location", "industry", "company_size", "seniority"].includes(key) && val) {
+        parts.push(val);
+      }
+    });
+    
+    runSearch(parts.join(" "));
+  };
+
+  // Skip clarification and search with original query
+  const handleSkipClarification = () => {
+    runSearch(query);
   };
 
   return (
@@ -208,14 +294,83 @@ export default function Home() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || clarifying}
               className="bg-white text-zinc-950 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed font-semibold py-3 px-4 sm:px-6 rounded-lg transition-all flex items-center gap-2 shadow-lg shadow-white/5 shrink-0"
             >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span className="hidden sm:inline">Search</span>} 
-              <span className="sm:hidden">{loading ? "" : <Search className="w-4 h-4"/>}</span>
+              {clarifying ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : loading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <span className="hidden sm:inline">Search</span>
+                  <span className="sm:hidden"><Search className="w-4 h-4"/></span>
+                </>
+              )}
             </button>
           </form>
         </div>
+
+        {/* Clarification Panel */}
+        {clarification.isOpen && (
+          <div className="max-w-2xl mx-auto mb-10 animate-in slide-in-from-top-4 duration-300">
+            <div className="bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 rounded-2xl p-6 shadow-xl">
+              <div className="flex items-start gap-4 mb-6">
+                <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center shrink-0">
+                  <MessageCircleQuestion className="w-5 h-5 text-indigo-400" />
+                </div>
+                <div>
+                  <h3 className="text-white font-semibold mb-1">Let me help refine your search</h3>
+                  <p className="text-zinc-400 text-sm">{clarification.reason || "A few quick questions to find better matches:"}</p>
+                </div>
+              </div>
+
+              <div className="space-y-4 mb-6">
+                {clarification.questions.map((q, idx) => (
+                  <div key={idx} className="space-y-2">
+                    <label className="text-sm text-zinc-300 font-medium">{q.question}</label>
+                    <div className="flex flex-wrap gap-2">
+                      {q.options?.map((opt) => (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => setAnswer(q.id, opt)}
+                          className={cn(
+                            "px-3 py-1.5 text-sm rounded-lg border transition-all",
+                            clarification.answers[q.id] === opt
+                              ? "bg-indigo-500 border-indigo-400 text-white"
+                              : "bg-zinc-800/50 border-zinc-700 text-zinc-300 hover:border-zinc-500"
+                          )}
+                        >
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-center justify-between pt-4 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={handleSkipClarification}
+                  className="text-zinc-400 hover:text-white text-sm font-medium flex items-center gap-1 transition-colors"
+                >
+                  <SkipForward className="w-4 h-4" />
+                  Skip
+                </button>
+                <button
+                  type="button"
+                  onClick={handleContinueWithAnswers}
+                  className="bg-indigo-500 hover:bg-indigo-400 text-white font-semibold py-2 px-4 rounded-lg flex items-center gap-2 transition-colors"
+                >
+                  Continue
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Error Message */}
         {error && (
