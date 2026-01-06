@@ -38,6 +38,23 @@ def get_output_dir() -> str:
     return output_dir
 
 
+def _format_location(lead: Dict[str, Any]) -> Optional[str]:
+    """Format location from lead data, avoiding 'None, None, None' display."""
+    # First, try the location field directly
+    location = lead.get("location")
+    if location and str(location).strip() and str(location).strip().lower() != "none":
+        return str(location).strip()
+    
+    # Fallback: build from city/state/country
+    parts = []
+    for field in ["city", "state", "country"]:
+        value = lead.get(field)
+        if value and str(value).strip() and str(value).strip().lower() != "none":
+            parts.append(str(value).strip())
+    
+    return ", ".join(parts) if parts else None
+
+
 def get_merged_leads(run_id: str) -> List[Dict[str, Any]]:
     """Get leads merged with their scores."""
     leads = get_leads_by_run(run_id)
@@ -144,7 +161,7 @@ def export_json(run_id: str, filename: str = "leads.json") -> str:
                 "company_name": l.get("company_name"),
                 "company_industry": l.get("company_industry"),
                 "company_size": l.get("company_size"),
-                "location": l.get("location") or f"{l.get('city', '')}, {l.get('state', '')}, {l.get('country', '')}".strip(", ") or None,
+                "location": _format_location(l),
                 "linkedin_url": l.get("linkedin_url"),
                 "fit_score": l.get("fit_score"),
                 "score_breakdown": l.get("score_reasons", [])
