@@ -1,13 +1,13 @@
 ---
 name: change-color
-description: Change colors in product images using Livus AI. Use when user wants to modify clothing colors or visualize different color variations. Supports local images and Shopify product URLs.
+description: Change colors in product images using Visuals AI. Use when user wants to modify clothing colors or visualize different color variations. Supports local images and Shopify product URLs.
 allowed-tools: Bash, AskUserQuestion
 disable-model-invocation: false
 ---
 
 # Change Color Workflow
 
-Change the color of clothing in product images using Livus AI's color transformation workflow.
+Change the color of clothing in product images using Visuals AI's color transformation workflow.
 
 ## Supported inputs
 
@@ -17,7 +17,7 @@ Change the color of clothing in product images using Livus AI's color transforma
 
 ## Required environment variable
 
-Ensure `LIVUS_API_KEY` is set in your environment. This is the master API key for Livus AI.
+Ensure `VISUALS_API_KEY` is set in your environment. This is the master API key for Visuals AI.
 
 ## Workflow steps
 
@@ -33,7 +33,7 @@ Check if the user provided:
 If the input is a Shopify product URL, fetch available images first:
 
 ```bash
-curl -X POST ${LIVUS_API_URL:-https://visuals-ai.vercel.app}/api/zen-product \
+curl -X POST ${VISUALS_API_URL:-https://visuals-ai.vercel.app}/api/zen-product \
   -H "Content-Type: application/json" \
   -d '{"productUrl": "<shopify_url>", "action": "fetch"}'
 ```
@@ -55,7 +55,7 @@ This returns:
 After the user selects an image, upload it to get a fal.ai URL:
 
 ```bash
-curl -X POST ${LIVUS_API_URL:-https://visuals-ai.vercel.app}/api/zen-product \
+curl -X POST ${VISUALS_API_URL:-https://visuals-ai.vercel.app}/api/zen-product \
   -H "Content-Type: application/json" \
   -d '{"imageUrl": "<selected_fullUrl>", "action": "upload"}'
 ```
@@ -130,8 +130,8 @@ Use Node.js to construct JSON payload (avoids shell escaping issues with large b
 
 ```bash
 # Set API credentials
-API_URL="${LIVUS_API_URL:-https://visuals-ai.vercel.app}"
-API_KEY="${LIVUS_API_KEY}"
+API_URL="${VISUALS_API_URL:-https://visuals-ai.vercel.app}"
+API_KEY="${VISUALS_API_KEY}"
 
 # Create JSON payload using Node.js (handles large base64 strings properly)
 node -e "
@@ -176,8 +176,8 @@ Extract job ID and poll until completed:
 job_id=$(echo "$response" | grep -o '"jobId":"[^"]*"' | cut -d'"' -f4)
 
 # Poll for completion (max 60 seconds)
-API_URL="${LIVUS_API_URL:-https://visuals-ai.vercel.app}"
-API_KEY="${LIVUS_API_KEY}"
+API_URL="${VISUALS_API_URL:-https://visuals-ai.vercel.app}"
+API_KEY="${VISUALS_API_KEY}"
 
 for i in {1..20}; do
   sleep 3

@@ -6,7 +6,7 @@ allowed-tools: Bash, AskUserQuestion
 
 # Change Pose Workflow
 
-Change the pose or position of models in product images using Livus AI.
+Change the pose or position of models in product images using Visuals AI.
 
 ## Input handling
 
@@ -37,8 +37,8 @@ Follow the execution pattern from `change-color` skill:
 
 ```bash
 # Set API credentials
-API_URL="${LIVUS_API_URL:-https://visuals-ai.vercel.app}"
-API_KEY="${LIVUS_API_KEY}"
+API_URL="${VISUALS_API_URL:-https://visuals-ai.vercel.app}"
+API_KEY="${VISUALS_API_KEY}"
 
 # Create JSON payload using Node.js
 node -e "

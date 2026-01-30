@@ -1,10 +1,10 @@
-# Livus AI Visual Workflows
+# Visuals AI Visual Workflows
 
-AI skills for transforming product images using Livus AI's visual workflows.
+AI skills for transforming product images using Visuals AI's visual workflows.
 
 ## Overview
 
-These skills enable AI agents to interact with Livus AI's image transformation workflows. They support local images, direct URLs, and Shopify product URLs with intelligent image handling including auto-resize and proper authentication.
+These skills enable AI agents to interact with Visuals AI's image transformation workflows. They support local images, direct URLs, and Shopify product URLs with intelligent image handling including auto-resize and proper authentication.
 
 ## Available Skills
 
@@ -47,10 +47,10 @@ Animate static product images into videos.
 
 ### Required Environment Variable
 
-Set the `LIVUS_API_KEY` environment variable with your master API key:
+Set the `VISUALS_API_KEY` environment variable with your master API key:
 
 ```bash
-export LIVUS_API_KEY="your-master-api-key-here"
+export VISUALS_API_KEY="your-master-api-key-here"
 ```
 
 ### Optional API URL
@@ -58,7 +58,7 @@ export LIVUS_API_KEY="your-master-api-key-here"
 By default, skills use `https://visuals-ai.vercel.app`. To override:
 
 ```bash
-export LIVUS_API_URL="http://localhost:3000"  # For local testing
+export VISUALS_API_URL="http://localhost:3000"  # For local testing
 ```
 
 ## Supported Input Types
@@ -108,10 +108,10 @@ See `BEST_PRACTICES.md` for implementation details including:
 
 ## API Documentation
 
-For complete API documentation, see the main Livus AI repository:
-- [AI Integration Guide](https://github.com/Livus-AI/visuals-ai/blob/main/AI_INTEGRATION.md)
-- [API Documentation](https://github.com/Livus-AI/visuals-ai/blob/main/docs/visuals/API.md)
-- [Master Key Guide](https://github.com/Livus-AI/visuals-ai/blob/main/MASTER_SERVICE_KEY_GUIDE.md)
+For complete API documentation, see the main Visuals AI repository:
+- [AI Integration Guide](https://github.com/Visuals-AI/visuals-ai/blob/main/AI_INTEGRATION.md)
+- [API Documentation](https://github.com/Visuals-AI/visuals-ai/blob/main/docs/visuals/API.md)
+- [Master Key Guide](https://github.com/Visuals-AI/visuals-ai/blob/main/MASTER_SERVICE_KEY_GUIDE.md)
 
 ## Example Usage
 
@@ -119,7 +119,7 @@ For complete API documentation, see the main Livus AI repository:
 
 ```bash
 # Set environment variable
-export LIVUS_API_KEY="your-master-api-key"
+export VISUALS_API_KEY="your-master-api-key"
 
 # Start Claude Code
 claude-code
@@ -144,8 +144,8 @@ Claude will:
 ## Troubleshooting
 
 ### "Authentication required" error
-- Make sure `LIVUS_API_KEY` is set in your environment
-- Check it's set: `echo $LIVUS_API_KEY`
+- Make sure `VISUALS_API_KEY` is set in your environment
+- Check it's set: `echo $VISUALS_API_KEY`
 
 ### "Connection refused" error
 - Make sure the API server is accessible
@@ -170,4 +170,4 @@ Claude will:
 
 ## License
 
-See the main Livus AI repository for license information.
+See the main Visuals AI repository for license information.

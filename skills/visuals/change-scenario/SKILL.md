@@ -18,8 +18,8 @@ Follow the input handling pattern from `change-color` skill:
 ## Execute workflow
 
 ```bash
-curl -X POST ${LIVUS_API_URL:-https://visuals-ai.vercel.app}/api/workflow/execute \
-  -H "Authorization: Bearer ${LIVUS_API_KEY}" \
+curl -X POST ${VISUALS_API_URL:-https://visuals-ai.vercel.app}/api/workflow/execute \
+  -H "Authorization: Bearer ${VISUALS_API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{
     "workflowId": "change-scenario",

@@ -29,8 +29,8 @@ fi
 Large base64 strings cause "argument list too long" errors with shell. Use Node.js:
 
 ```bash
-API_URL="${LIVUS_API_URL:-https://visuals-ai.vercel.app}"
-API_KEY="${LIVUS_API_KEY}"
+API_URL="${VISUALS_API_URL:-https://visuals-ai.vercel.app}"
+API_KEY="${VISUALS_API_KEY}"
 
 node -e "
 const fs = require('fs');
@@ -79,13 +79,13 @@ Always assign to local variables first for reliable expansion:
 
 ```bash
 # Good
-API_URL="${LIVUS_API_URL:-https://visuals-ai.vercel.app}"
-API_KEY="${LIVUS_API_KEY}"
+API_URL="${VISUALS_API_URL:-https://visuals-ai.vercel.app}"
+API_KEY="${VISUALS_API_KEY}"
 
 curl ... -H "Authorization: Bearer $API_KEY"
 
 # Avoid
-curl ... -H "Authorization: Bearer ${LIVUS_API_KEY}"  # May not expand properly
+curl ... -H "Authorization: Bearer ${VISUALS_API_KEY}"  # May not expand properly
 ```
 
 ## Reference Implementation
